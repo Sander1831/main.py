@@ -13,17 +13,23 @@ Usage:
        https://www.ecobee.com/home/ecobeeLogin.jsp -> My Apps -> Add Application
 
     3. Press Enter after authorizing the app to retrieve your thermostat data.
+
+    To view the results of the last successful run without making a new API
+    call, pass the --show-last flag:
+        python main.py --show-last
 """
 
 import argparse
 import json
 import os
 import sys
+from datetime import datetime, timezone
 
 import requests
 
 ECOBEE_API_BASE = "https://api.ecobee.com"
 TOKEN_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".ecobee_tokens.json")
+LAST_RUN_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".ecobee_last_run.json")
 
 # Ecobee PIN authorizations expire after 9 minutes by default
 DEFAULT_PIN_EXPIRY_MINUTES = 9
@@ -42,6 +48,29 @@ def save_tokens(tokens):
     fd = os.open(TOKEN_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f:
         json.dump(tokens, f, indent=2)
+
+
+def save_last_run(data):
+    """Persist the most recent thermostat API response to disk."""
+    record = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "data": data,
+    }
+    fd = os.open(LAST_RUN_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump(record, f, indent=2)
+
+
+def load_last_run():
+    """Load the most recent thermostat API response from disk.
+
+    Returns a dict with ``timestamp`` and ``data`` keys, or ``None`` if no
+    previous run has been saved.
+    """
+    if os.path.exists(LAST_RUN_FILE):
+        with open(LAST_RUN_FILE, "r") as f:
+            return json.load(f)
+    return None
 
 
 def request_pin(api_key):
@@ -207,7 +236,21 @@ def main():
         default=os.environ.get("ECOBEE_API_KEY"),
         help="Ecobee application API key (or set ECOBEE_API_KEY env var)",
     )
+    parser.add_argument(
+        "--show-last",
+        action="store_true",
+        help="Display the results from the last successful run without making a new API call",
+    )
     args = parser.parse_args()
+
+    if args.show_last:
+        record = load_last_run()
+        if record is None:
+            print("No previous run found. Run without --show-last first to fetch thermostat data.")
+            sys.exit(1)
+        print(f"Last run: {record['timestamp']}")
+        display_thermostats(record["data"])
+        return
 
     if not args.api_key:
         print(
@@ -219,6 +262,7 @@ def main():
 
     access_token = ensure_valid_token(args.api_key)
     data = get_thermostats(access_token)
+    save_last_run(data)
     display_thermostats(data)
 
 

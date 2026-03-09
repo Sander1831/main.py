@@ -1,1 +1,4 @@
 .ecobee_tokens.json
+.ecobee_last_run.json
+__pycache__/
+*.pyc
