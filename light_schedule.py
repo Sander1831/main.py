@@ -71,9 +71,11 @@ def apply_home_assistant(url, token, entities, payload):
         try:
             response = requests.post(endpoint, headers=headers, json=data, timeout=10)
             response.raise_for_status()
-        except requests.HTTPError as exc:
+        except requests.RequestException as exc:
+            status = exc.response.status_code if exc.response is not None else "n/a"
+            details = exc.response.text if exc.response is not None else str(exc)
             raise RuntimeError(
-                f"entity '{entity}' failed with status {response.status_code}: {response.text}"
+                f"entity '{entity}' failed with status {status}: {details}"
             ) from exc
 
 
@@ -140,7 +142,7 @@ def main():
 
     try:
         apply_home_assistant(args.ha_url, args.ha_token, args.entity, payload)
-    except requests.HTTPError as exc:
+    except RuntimeError as exc:
         print(f"Failed to apply light settings: {exc}", file=sys.stderr)
         sys.exit(1)
 
