@@ -129,7 +129,7 @@ def main():
         else {"color_temp_kelvin": args.day_kelvin, "brightness_pct": 100}
     )
 
-    mode = "night color mode" if night_mode else f"day cool-white mode ({args.day_kelvin}K)"
+    mode = "night color mode" if night_mode else f"day cool white mode ({args.day_kelvin}K)"
     print(f"Current mode: {mode}")
     print(f"Payload: {payload}")
 
