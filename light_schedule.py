@@ -72,16 +72,16 @@ def apply_home_assistant(url, token, entities, payload):
             response = requests.post(endpoint, headers=headers, json=data, timeout=10)
             response.raise_for_status()
         except requests.RequestException as exc:
-            status = exc.response.status_code if exc.response is not None else "n/a"
+            status_code = exc.response.status_code if exc.response is not None else "n/a"
             details = exc.response.text if exc.response is not None else str(exc)
             raise RuntimeError(
-                f"entity '{entity}' failed with status {status}: {details}"
+                f"entity '{entity}' failed with status {status_code}: {details}"
             ) from exc
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Set lights to cool white (5500K) by day and color by night."
+        description="Set lights to cool white by day and color by night."
     )
     parser.add_argument("--day-start", type=parse_time, default=parse_time("07:00"))
     parser.add_argument("--night-start", type=parse_time, default=parse_time("20:00"))
