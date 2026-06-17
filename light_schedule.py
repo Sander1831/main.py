@@ -40,27 +40,19 @@ def is_night(now_time, day_start, night_start):
     return night_start <= now_time < day_start
 
 
-def build_light_payload(night_mode, night_rgb):
-    """Create a Home Assistant light.turn_on payload."""
-    if night_mode:
-        return {
-            "rgb_color": list(night_rgb),
-            "brightness_pct": 30,
-        }
-    return {
-        "color_temp_kelvin": 5500,
-        "brightness_pct": 100,
-    }
-
-
 def apply_home_assistant(url, token, entities, payload):
     """Apply payload to Home Assistant light entities."""
     endpoint = f"{url.rstrip('/')}/api/services/light/turn_on"
     headers = {"Authorization": "Bearer " + token, "Content-Type": "application/json"}
     for entity in entities:
         data = {"entity_id": entity, **payload}
-        response = requests.post(endpoint, headers=headers, json=data, timeout=10)
-        response.raise_for_status()
+        try:
+            response = requests.post(endpoint, headers=headers, json=data, timeout=10)
+            response.raise_for_status()
+        except requests.HTTPError as exc:
+            raise requests.HTTPError(
+                f"entity '{entity}' failed with status {response.status_code}: {response.text}"
+            ) from exc
 
 
 def main():
@@ -74,6 +66,18 @@ def main():
         type=parse_rgb,
         default=parse_rgb("255,80,0"),
         help="Night color as R,G,B (0-255), default: 255,80,0",
+    )
+    parser.add_argument(
+        "--day-kelvin",
+        type=int,
+        default=5500,
+        help="Daytime color temperature in Kelvin, default: 5500",
+    )
+    parser.add_argument(
+        "--night-brightness",
+        type=int,
+        default=30,
+        help="Night brightness percent (1-100), default: 30",
     )
     parser.add_argument(
         "--ha-url",
@@ -95,7 +99,18 @@ def main():
     args = parser.parse_args()
     now_time = dt.datetime.now().time()
     night_mode = is_night(now_time, args.day_start, args.night_start)
-    payload = build_light_payload(night_mode, args.night_rgb)
+    if args.night_brightness < 1 or args.night_brightness > 100:
+        print("--night-brightness must be between 1 and 100.", file=sys.stderr)
+        sys.exit(2)
+    if args.day_kelvin < 1000 or args.day_kelvin > 20000:
+        print("--day-kelvin must be between 1000 and 20000.", file=sys.stderr)
+        sys.exit(2)
+
+    payload = (
+        {"rgb_color": list(args.night_rgb), "brightness_pct": args.night_brightness}
+        if night_mode
+        else {"color_temp_kelvin": args.day_kelvin, "brightness_pct": 100}
+    )
 
     mode = "night color mode" if night_mode else "day cool-white mode (5500K)"
     print(f"Current mode: {mode}")
