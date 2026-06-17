@@ -33,6 +33,28 @@ def parse_rgb(value):
     return channels
 
 
+def parse_day_kelvin(value):
+    """Parse daytime Kelvin value."""
+    try:
+        kelvin = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("Kelvin must be an integer.") from exc
+    if kelvin < 1000 or kelvin > 20000:
+        raise argparse.ArgumentTypeError("Kelvin must be between 1000 and 20000.")
+    return kelvin
+
+
+def parse_brightness(value):
+    """Parse brightness percentage."""
+    try:
+        brightness = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("Brightness must be an integer.") from exc
+    if brightness < 1 or brightness > 100:
+        raise argparse.ArgumentTypeError("Brightness must be between 1 and 100.")
+    return brightness
+
+
 def is_night(now_time, day_start, night_start):
     """Return True when current time falls in the configured night window."""
     if day_start < night_start:
@@ -50,7 +72,7 @@ def apply_home_assistant(url, token, entities, payload):
             response = requests.post(endpoint, headers=headers, json=data, timeout=10)
             response.raise_for_status()
         except requests.HTTPError as exc:
-            raise requests.HTTPError(
+            raise RuntimeError(
                 f"entity '{entity}' failed with status {response.status_code}: {response.text}"
             ) from exc
 
@@ -69,14 +91,14 @@ def main():
     )
     parser.add_argument(
         "--day-kelvin",
-        type=int,
-        default=5500,
+        type=parse_day_kelvin,
+        default=parse_day_kelvin("5500"),
         help="Daytime color temperature in Kelvin, default: 5500",
     )
     parser.add_argument(
         "--night-brightness",
-        type=int,
-        default=30,
+        type=parse_brightness,
+        default=parse_brightness("30"),
         help="Night brightness percent (1-100), default: 30",
     )
     parser.add_argument(
@@ -99,20 +121,13 @@ def main():
     args = parser.parse_args()
     now_time = dt.datetime.now().time()
     night_mode = is_night(now_time, args.day_start, args.night_start)
-    if args.night_brightness < 1 or args.night_brightness > 100:
-        print("--night-brightness must be between 1 and 100.", file=sys.stderr)
-        sys.exit(2)
-    if args.day_kelvin < 1000 or args.day_kelvin > 20000:
-        print("--day-kelvin must be between 1000 and 20000.", file=sys.stderr)
-        sys.exit(2)
-
     payload = (
         {"rgb_color": list(args.night_rgb), "brightness_pct": args.night_brightness}
         if night_mode
         else {"color_temp_kelvin": args.day_kelvin, "brightness_pct": 100}
     )
 
-    mode = "night color mode" if night_mode else "day cool-white mode (5500K)"
+    mode = "night color mode" if night_mode else f"day cool-white mode ({args.day_kelvin}K)"
     print(f"Current mode: {mode}")
     print(f"Payload: {payload}")
 
